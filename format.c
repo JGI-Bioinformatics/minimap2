@@ -244,6 +244,18 @@ static inline void write_tags(kstring_t *s, const mm_reg1_t *r)
 		mm_sprintf_lite(s, "\tNM:i:%d\tms:i:%d\tAS:i:%d\tnn:i:%d", r->blen - r->mlen + r->p->n_ambi, r->p->dp_max, r->p->dp_score, r->p->n_ambi);
 		if (r->p->trans_strand == 1 || r->p->trans_strand == 2)
 			mm_sprintf_lite(s, "\tts:A:%c", "?+-?"[r->p->trans_strand]);
+		mm_minipos_v minipos = r->p->minipos;
+		if (minipos.n) {
+			mm_sprintf_lite(s, "\tcq:B:");
+			int pos;
+			for(pos = 0; pos < minipos.n; pos++) {
+				mm_sprintf_lite(s, "%c%d", (pos==0?'I':','), (int) minipos.a[pos].qpos);
+			}
+			mm_sprintf_lite(s, "\tcr:B:");
+			for(pos = 0; pos < minipos.n; pos++) {
+				mm_sprintf_lite(s, "%c%d", (pos==0?'I':','), (int) minipos.a[pos].rpos);
+			}
+		}
 	}
 	mm_sprintf_lite(s, "\ttp:A:%c\tcm:i:%d\ts1:i:%d", type, r->cnt, r->score);
 	if (r->parent == r->id) mm_sprintf_lite(s, "\ts2:i:%d", r->subsc);

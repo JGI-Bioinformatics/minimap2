@@ -31,6 +31,7 @@
 #define MM_F_ALL_CHAINS    0x800000
 #define MM_F_OUT_MD        0x1000000
 #define MM_F_COPY_COMMENT  0x2000000
+#define MM_F_OUT_MINS      0x4000000 // preserve and output minimizers as a tag
 
 #define MM_I_HPC          0x1
 #define MM_I_NO_SEQ       0x2
@@ -47,6 +48,10 @@ extern "C" {
 // emulate 128-bit integers and arrays
 typedef struct { uint64_t x, y; } mm128_t;
 typedef struct { size_t n, m; mm128_t *a; } mm128_v;
+
+// track minimizer query and ref positions
+typedef struct { uint32_t qpos, rpos; } mm_minipos_t;
+typedef struct { int32_t n, m; mm_minipos_t *a; } mm_minipos_v;
 
 // minimap2 index
 typedef struct {
@@ -70,6 +75,7 @@ typedef struct {
 	int32_t dp_score, dp_max, dp_max2;  // DP score; score of the max-scoring segment; score of the best alternate mappings
 	uint32_t n_ambi:30, trans_strand:2; // number of ambiguous bases; transcript strand: 0 for unknown, 1 for +, 2 for -
 	uint32_t n_cigar;                   // number of cigar operations in cigar[]
+	mm_minipos_v minipos;               // optionally empty list of minimizer query and ref positions
 	uint32_t cigar[];
 } mm_extra_t;
 

@@ -66,6 +66,7 @@ static struct option long_options[] = {
 	{ "mask-level",     required_argument, 0, 'M' },
 	{ "min-dp-score",   required_argument, 0, 's' },
 	{ "sam",            no_argument,       0, 'a' },
+	{ "output-min",     no_argument,       0, 0  }, // 39
 	{ 0, 0, 0, 0}
 };
 
@@ -175,6 +176,7 @@ int main(int argc, char *argv[])
 		else if (c == 0 && long_idx ==28) opt.min_mid_occ = atoi(optarg); // --min-occ-floor
 		else if (c == 0 && long_idx ==29) opt.flag |= MM_F_OUT_MD; // --MD
 		else if (c == 0 && long_idx ==30) opt.min_join_flank_ratio = atof(optarg); // --lj-min-ratio
+		else if (c == 0 && long_idx ==39) opt.flag |= MM_F_OUT_MINS; // --output-min
 		else if (c == 0 && long_idx == 14) { // --frag
 			yes_or_no(&opt, MM_F_FRAG_MODE, long_idx, optarg, 1);
 		} else if (c == 0 && long_idx == 15) { // --secondary
@@ -276,6 +278,7 @@ int main(int argc, char *argv[])
 		fprintf(fp_help, "    -c           output CIGAR in PAF\n");
 		fprintf(fp_help, "    --cs[=STR]   output the cs tag; STR is 'short' (if absent) or 'long' [none]\n");
 		fprintf(fp_help, "    --MD         output the MD tag\n");
+		fprintf(fp_help, "    --output-min output the cq and cr tags of minimizer position arrays\n");
 		fprintf(fp_help, "    -Y           use soft clipping for supplementary alignments\n");
 		fprintf(fp_help, "    -t INT       number of threads [%d]\n", n_threads);
 		fprintf(fp_help, "    -K NUM       minibatch size for mapping [500M]\n");
