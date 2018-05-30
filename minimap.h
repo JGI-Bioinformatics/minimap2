@@ -51,7 +51,7 @@ typedef struct { size_t n, m; mm128_t *a; } mm128_v;
 
 // track minimizer query and ref positions
 typedef struct { uint32_t qpos, rpos; } mm_minipos_t;
-typedef struct { int32_t n, m; mm_minipos_t *a; } mm_minipos_v;
+typedef struct { uint32_t n, m; mm_minipos_t *a; } mm_minipos_v;
 
 // minimap2 index
 typedef struct {
@@ -75,7 +75,6 @@ typedef struct {
 	int32_t dp_score, dp_max, dp_max2;  // DP score; score of the max-scoring segment; score of the best alternate mappings
 	uint32_t n_ambi:30, trans_strand:2; // number of ambiguous bases; transcript strand: 0 for unknown, 1 for +, 2 for -
 	uint32_t n_cigar;                   // number of cigar operations in cigar[]
-	mm_minipos_v minipos;               // optionally empty list of minimizer query and ref positions
 	uint32_t cigar[];
 } mm_extra_t;
 
@@ -93,6 +92,7 @@ typedef struct {
 	uint32_t mapq:8, split:2, rev:1, inv:1, sam_pri:1, proper_frag:1, pe_thru:1, seg_split:1, seg_id:8, split_inv:1, dummy:7;
 	uint32_t hash;
 	float div;
+	mm_minipos_v minipos;   // optionally empty list of minimizer query and ref positions
 	mm_extra_t *p;
 } mm_reg1_t;
 

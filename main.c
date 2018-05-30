@@ -96,7 +96,7 @@ static inline void yes_or_no(mm_mapopt_t *opt, int flag, int long_idx, const cha
 
 int main(int argc, char *argv[])
 {
-	const char *opt_str = "2aSDw:k:K:t:r:f:Vv:g:G:I:d:XT:s:x:Hcp:M:n:z:A:B:O:E:m:N:Qu:R:hF:LC:y";
+	const char *opt_str = "2aSDw:k:K:t:r:f:Vv:g:G:I:d:PXT:s:x:Hcp:M:n:z:A:B:O:E:m:N:Qu:R:hF:LC:y";
 	mm_mapopt_t opt;
 	mm_idxopt_t ipt;
 	int i, c, n_threads = 3, long_idx;

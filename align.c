@@ -5,6 +5,7 @@
 #include "minimap.h"
 #include "mmpriv.h"
 #include "ksw2.h"
+#include "kvec.h"
 
 static void ksw_gen_simple_mat(int m, int8_t *mat, int8_t a, int8_t b)
 {
@@ -702,10 +703,10 @@ static inline mm_reg1_t *mm_insert_reg(const mm_reg1_t *r, int i, int *n_regs, m
 	return regs;
 }
 
-mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *mi, int qlen, const char *qstr, int *n_regs_, mm_reg1_t *regs, mm128_t *a)
+mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *mi, int qlen, const char *qstr, int *n_regs_, mm_reg1_t *regs, int64_t *n_a, mm128_t *a)
 {
 	extern unsigned char seq_nt4_table[256];
-	int32_t i, n_regs = *n_regs_, n_a;
+	int32_t i, n_regs = *n_regs_;
 	uint8_t *qseq0[2];
 	ksw_extz_t ez;
 
@@ -718,7 +719,7 @@ mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *m
 	}
 
 	// align through seed hits
-	n_a = mm_squeeze_a(km, n_regs, regs, a);
+	*n_a = mm_squeeze_a(km, n_regs, regs, a);
 	memset(&ez, 0, sizeof(ksw_extz_t));
 	for (i = 0; i < n_regs; ++i) {
 		mm_reg1_t r2;
@@ -726,21 +727,21 @@ mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *m
 			mm_reg1_t s[2], s2[2];
 			int which, trans_strand;
 			s[0] = s[1] = regs[i];
-			mm_align1(km, opt, mi, qlen, qseq0, &s[0], &s2[0], n_a, a, &ez, MM_F_SPLICE_FOR);
-			mm_align1(km, opt, mi, qlen, qseq0, &s[1], &s2[1], n_a, a, &ez, MM_F_SPLICE_REV);
+			mm_align1(km, opt, mi, qlen, qseq0, &s[0], &s2[0], *n_a, a, &ez, MM_F_SPLICE_FOR);
+			mm_align1(km, opt, mi, qlen, qseq0, &s[1], &s2[1], *n_a, a, &ez, MM_F_SPLICE_REV);
 			if (s[0].p->dp_score > s[1].p->dp_score) which = 0, trans_strand = 1;
 			else if (s[0].p->dp_score < s[1].p->dp_score) which = 1, trans_strand = 2;
 			else trans_strand = 3, which = (qlen + s[0].p->dp_score) & 1; // randomly choose a strand, effectively
 			if (which == 0) {
 				regs[i] = s[0], r2 = s2[0];
-				free(s[1].p);
+				free(s[1].p); free(s[1].minipos.a);
 			} else {
 				regs[i] = s[1], r2 = s2[1];
-				free(s[0].p);
+				free(s[0].p); free(s[0].minipos.a);
 			}
 			regs[i].p->trans_strand = trans_strand;
 		} else { // one round of alignment
-			mm_align1(km, opt, mi, qlen, qseq0, &regs[i], &r2, n_a, a, &ez, opt->flag);
+			mm_align1(km, opt, mi, qlen, qseq0, &regs[i], &r2, *n_a, a, &ez, opt->flag);
 			if (opt->flag&MM_F_SPLICE)
 				regs[i].p->trans_strand = opt->flag&MM_F_SPLICE_FOR? 1 : 2;
 		}
@@ -749,6 +750,18 @@ mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *m
 			if (mm_align1_inv(km, opt, mi, qlen, qseq0, &regs[i-1], &regs[i], &r2, &ez)) {
 				regs = mm_insert_reg(&r2, i, &n_regs, regs);
 				++i; // skip the inserted INV alignment
+			}
+		}
+		if (regs[i].cnt > 0 && opt->flag&MM_F_OUT_MINS) {
+			// store the ref and query minimozer positions for later output
+			mm_minipos_v *minipos = &(regs[i].minipos);
+			kv_resize(mm_minipos_t, 0, *minipos, regs[i].cnt);
+			int32_t pos, max=regs[i].as + regs[i].cnt;
+			for (pos = regs[i].as; pos < *n_a && pos < max; pos++) {
+				uint32_t qpos = (uint32_t)(a[pos].y&0xffffffff);
+				uint32_t rpos = (uint32_t)(a[pos].x&0xffffffff);
+				mm_minipos_t tmp = { qpos, rpos };
+				kv_push(mm_minipos_t, 0, *minipos, tmp);
 			}
 		}
 	}

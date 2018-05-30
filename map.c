@@ -320,10 +320,10 @@ static void chain_post(const mm_mapopt_t *opt, int max_chain_gap_ref, const mm_i
 	}
 }
 
-static mm_reg1_t *align_regs(const mm_mapopt_t *opt, const mm_idx_t *mi, void *km, int qlen, const char *seq, int *n_regs, mm_reg1_t *regs, mm128_t *a)
+static mm_reg1_t *align_regs(const mm_mapopt_t *opt, const mm_idx_t *mi, void *km, int qlen, const char *seq, int *n_regs, mm_reg1_t *regs, int64_t *n_a, mm128_t *a)
 {
 	if (!(opt->flag & MM_F_CIGAR)) return regs;
-	regs = mm_align_skeleton(km, opt, mi, qlen, seq, n_regs, regs, a); // this calls mm_filter_regs()
+	regs = mm_align_skeleton(km, opt, mi, qlen, seq, n_regs, regs, n_a, a); // this calls mm_filter_regs()
 	if (!(opt->flag & MM_F_ALL_CHAINS)) { // don't choose primary mapping(s)
 		mm_set_parent(km, opt->mask_level, *n_regs, regs, opt->a * 2 + opt->b);
 		mm_select_sub(km, opt->pri_ratio, mi->k*2, opt->best_n, n_regs, regs);
@@ -413,21 +413,22 @@ void mm_map_frag(const mm_idx_t *mi, int n_segs, const int *qlens, const char **
 	if (!is_sr) mm_est_err(mi, qlen_sum, n_regs0, regs0, a, n_mini_pos, mini_pos);
 
 	if (n_segs == 1) { // uni-segment
-		regs0 = align_regs(opt, mi, b->km, qlens[0], seqs[0], &n_regs0, regs0, a);
+		regs0 = align_regs(opt, mi, b->km, qlens[0], seqs[0], &n_regs0, regs0, &n_a, a);
 		mm_set_mapq(b->km, n_regs0, regs0, opt->min_chain_score, opt->a, rep_len, is_sr);
-fprintf(stderr, "%d minimizers. regs0=%p n_regs0=%d\n", n_mini_pos, regs0, n_regs0);
-		if ((opt->flag & MM_F_OUT_MINS) && regs0 && regs0->p) {
-			// record ref and query minimizer positions for later output
-			mm_minipos_v *minipos = &(regs0->p->minipos);
-			kv_resize(mm_minipos_t, 0, *minipos, n_mini_pos);
-			int32_t pos;
-			for(pos=0; pos < n_mini_pos; pos++) {
-				uint32_t qpos = (uint32_t)(a[pos].y&0xffffffff)>>1;
-				mm_minipos_t tmp = { qpos, (uint32_t)(mini_pos[pos]&0xffffffff) };
-				kv_push(mm_minipos_t, 0, *minipos, tmp);
-			}
-fprintf(stderr, "generated them\n");
-		}
+fprintf(stderr, "qname=%s %d minimizers. regs0=%p n_regs0=%d cnt=%d n_a=%ld\n", qname, n_mini_pos, regs0, n_regs0, regs0->cnt, n_a);
+// TODO move to align skeletons 
+//		if ((opt->flag & MM_F_OUT_MINS)) {
+//			// record ref and query minimizer positions for later output
+//			mm_minipos_v *minipos = &(regs0->minipos);
+//			kv_resize(mm_minipos_t, 0, *minipos, n_mini_pos);
+//			int32_t pos;
+//			for(pos=0; pos < n_mini_pos; pos++) {
+//				//uint32_t qpos = (uint32_t)(a[pos].y&0xffffffff)>>1;
+//				mm_minipos_t tmp = { 0, (uint32_t)(mini_pos[pos]&0xffffffff) };
+//				kv_push(mm_minipos_t, 0, *minipos, tmp);
+//			}
+//fprintf(stderr, "generated them\n");
+//		}
 
 		n_regs[0] = n_regs0, regs[0] = regs0;
 	} else { // multi-segment
@@ -435,8 +436,9 @@ fprintf(stderr, "generated them\n");
 		seg = mm_seg_gen(b->km, hash, n_segs, qlens, n_regs0, regs0, n_regs, regs, a); // split fragment chain to separate segment chains
 		free(regs0);
 		for (i = 0; i < n_segs; ++i) {
+fprintf(stderr, "qname=%s %d minimizers. regi=%d regs0=%p n_regs0=%d cnt=%d n_a=%ld\n", qname, n_mini_pos, i, regs[i], n_regs[i], regs[i]->cnt, seg[i].n_a);
 			mm_set_parent(b->km, opt->mask_level, n_regs[i], regs[i], opt->a * 2 + opt->b); // update mm_reg1_t::parent
-			regs[i] = align_regs(opt, mi, b->km, qlens[i], seqs[i], &n_regs[i], regs[i], seg[i].a);
+			regs[i] = align_regs(opt, mi, b->km, qlens[i], seqs[i], &n_regs[i], regs[i], &seg[i].n_a, seg[i].a);
 			mm_set_mapq(b->km, n_regs[i], regs[i], opt->min_chain_score, opt->a, rep_len, is_sr);
 		}
 		mm_seg_free(b->km, n_segs, seg);
@@ -616,7 +618,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
 				}
 			}
 			for (i = seg_st; i < seg_en; ++i) {
-				for (j = 0; j < s->n_reg[i]; ++j) free(s->reg[i][j].p);
+				for (j = 0; j < s->n_reg[i]; ++j) { free(s->reg[i][j].p); free(s->reg[i][j].minipos.a); }
 				free(s->reg[i]);
 				free(s->seq[i].seq); free(s->seq[i].name);
 				if (s->seq[i].qual) free(s->seq[i].qual);
