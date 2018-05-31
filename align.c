@@ -752,18 +752,6 @@ mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *m
 				++i; // skip the inserted INV alignment
 			}
 		}
-		if (regs[i].cnt > 0 && opt->flag&MM_F_OUT_MINS) {
-			// store the ref and query minimozer positions for later output
-			mm_minipos_v *minipos = &(regs[i].minipos);
-			kv_resize(mm_minipos_t, 0, *minipos, regs[i].cnt);
-			int32_t pos, max=regs[i].as + regs[i].cnt;
-			for (pos = regs[i].as; pos < *n_a && pos < max; pos++) {
-				uint32_t qpos = (uint32_t)(a[pos].y&0xffffffff);
-				uint32_t rpos = (uint32_t)(a[pos].x&0xffffffff);
-				mm_minipos_t tmp = { qpos, rpos };
-				kv_push(mm_minipos_t, 0, *minipos, tmp);
-			}
-		}
 	}
 	*n_regs_ = n_regs;
 	kfree(km, qseq0[0]);

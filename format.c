@@ -247,16 +247,16 @@ static inline void write_tags(kstring_t *s, const mm_reg1_t *r)
 	}
 	if (r->minipos.n) {
 		mm_minipos_v minipos = r->minipos;
-		mm_sprintf_lite(s, "\tcq:B:");
+		mm_sprintf_lite(s, "\tcq:B:I");
 		int pos;
 		for(pos = 0; pos < minipos.n; pos++) {
-			mm_sprintf_lite(s, "%c%d", (pos==0?'I':','), (int) minipos.a[pos].qpos);
+			mm_sprintf_lite(s, ",%u", minipos.a[pos].qpos);
 		}
-		mm_sprintf_lite(s, "\tcr:B:");
+		mm_sprintf_lite(s, "\tcr:B:I");
 		for(pos = 0; pos < minipos.n; pos++) {
-			mm_sprintf_lite(s, "%c%d", (pos==0?'I':','), (int) minipos.a[pos].rpos);
+			mm_sprintf_lite(s, ",%u", minipos.a[pos].rpos);
 		}
-	} else { mm_sprintf_lite(s, "\tcZ:Z:NoMiniPos"); }
+	}
 	mm_sprintf_lite(s, "\ttp:A:%c\tcm:i:%d\ts1:i:%d", type, r->cnt, r->score);
 	if (r->parent == r->id) mm_sprintf_lite(s, "\ts2:i:%d", r->subsc);
 	if (r->div >= 0.0f && r->div <= 1.0f) {
