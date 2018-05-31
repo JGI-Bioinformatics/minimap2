@@ -252,7 +252,6 @@ static void mm_store_minimizer_regs(const mm_mapopt_t *opt, int qlen, int n_regs
 	for(i=0; i < n_regs; i++) {
 		if (regs[i].cnt > 0) {
 			int isRev = regs[i].rev;
-fprintf(stderr, "recording minipos region i=%d cnt=%d n_a=%ld\n", i, regs[i].cnt, n_a);
 			// store the ref and query minimozer positions for later output
 			mm_minipos_v *minipos = &(regs[i].minipos);
 			kv_resize(mm_minipos_t, 0, *minipos, regs[i].cnt);
