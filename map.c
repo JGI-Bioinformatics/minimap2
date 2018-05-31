@@ -530,7 +530,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
 				}
 			}
 			for (i = seg_st; i < seg_en; ++i) {
-				for (j = 0; j < s->n_reg[i]; ++j) { free(s->reg[i][j].p); free(s->reg[i][j].minipos.a); }
+				for (j = 0; j < s->n_reg[i]; ++j) { free(s->reg[i][j].p); kv_destroy(s->reg[i][j].minipos); }
 				free(s->reg[i]);
 				free(s->seq[i].seq); free(s->seq[i].name);
 				if (s->seq[i].qual) free(s->seq[i].qual);

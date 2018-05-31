@@ -734,10 +734,10 @@ mm_reg1_t *mm_align_skeleton(void *km, const mm_mapopt_t *opt, const mm_idx_t *m
 			else trans_strand = 3, which = (qlen + s[0].p->dp_score) & 1; // randomly choose a strand, effectively
 			if (which == 0) {
 				regs[i] = s[0], r2 = s2[0];
-				free(s[1].p); free(s[1].minipos.a);
+				free(s[1].p); kv_destroy(s[1].minipos);
 			} else {
 				regs[i] = s[1], r2 = s2[1];
-				free(s[0].p); free(s[0].minipos.a);
+				free(s[0].p); kv_destroy(s[0].minipos);
 			}
 			regs[i].p->trans_strand = trans_strand;
 		} else { // one round of alignment
