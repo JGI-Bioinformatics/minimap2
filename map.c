@@ -106,75 +106,6 @@ static mm_match_t *collect_matches(void *km, int *_n_m, int max_occ, const mm_id
 			if (i < mv->n - 1 && p->x>>8 == mv->a[i + 1].x>>8) q->is_tandem = 1;
 			*n_a += q->n;
 			(*mini_pos)[(*n_mini_pos)++] = (uint64_t)q_span<<32 | q_pos>>1;
-//=======
-//	// prepare the input array _a_ for LIS
-////	b->n = 0;
-//	for (i = start; i < end; ++i)
-//		if (b->coef.a[i].x != UINT64_MAX)
-//			b->a[b->n++] = b->coef.a[i].y, rid = b->coef.a[i].x << 1 >> 33, rev = b->coef.a[i].x >> 63;
-//	if (b->n < min_cnt) return;
-//	radix_sort_64(b->a, b->a + b->n);
-//
-//	// find the longest increasing sequence
-//	l_lis = rev? ks_lis_low32gt(b->n, b->a, b->b, b->p) : ks_lis_low32lt(b->n, b->a, b->b, b->p); // LIS
-//	if (l_lis < min_cnt) return;
-//	for (i = 1, j = 1; i < l_lis; ++i) // squeeze out minimizaers reused in the LIS sequence
-//		if (b->a[b->b[i]]>>32 != b->a[b->b[i-1]]>>32)
-//			b->a[b->b[j++]] = b->a[b->b[i]];
-//	l_lis = j;
-//	if (l_lis < min_cnt) return;
-//
-//	// convert LISes to regions; possibly break an LIS at a long gaps
-//	for (i = 1, start = 0; i <= l_lis; ++i) {
-//		int32_t qgap = i == l_lis? 0 : ((uint32_t)b->mini.a[b->a[b->b[i]]>>32].y>>1) - ((uint32_t)b->mini.a[b->a[b->b[i-1]]>>32].y>>1);
-//		if (i == l_lis || (qgap > max_gap && abs((int32_t)b->a[b->b[i]] - (int32_t)b->a[b->b[i-1]]) > max_gap)) {
-//			if (i - start >= min_cnt) {
-//				uint32_t lq = 0, lr = 0, eq = 0, er = 0, sq = 0, sr = 0;
-//				mm_reg1_t *r;
-//				kv_pushp(mm_reg1_t, b->reg, &r);
-//				r->rid = rid, r->rev = rev, r->cnt = i - start, r->rep = 0;
-//				r->qs = ((uint32_t)b->mini.a[b->a[b->b[start]]>>32].y>>1) - (k - 1);
-//				r->qe = ((uint32_t)b->mini.a[b->a[b->b[i-1]]>>32].y>>1) + 1;
-//				r->rs = rev? (uint32_t)b->a[b->b[i-1]] : (uint32_t)b->a[b->b[start]];
-//				r->re = rev? (uint32_t)b->a[b->b[start]] : (uint32_t)b->a[b->b[i-1]];
-//				r->rs -= k - 1;
-//				r->re += 1;
-//				for (j = start; j < i; ++j) { // count the number of times each minimizer is used
-//					int jj = b->a[b->b[j]]>>32;
-//					b->mini.a[jj].y += 1ULL<<32;
-////					kv_push(uint32_t, b->reg2mini, jj); // keep minimizer<=>reg mapping for derep
-//				}
-//				if (flag&MM_F_OUT_MINI) {
-//					// keep the reference and query minimizer position mapping
-//					for (j = start; j < i; ++j) { 
-////						kv_push(uint32_t, b->reg2qmini, ((uint32_t)b->mini.a[b->a[b->b[j]]>>32].y>>1) - (k - 1));
-//					}
-//					if (rev) {
-//						for (j = i-1; j >= start; --j) { 
-//							kv_push(uint32_t, b->reg2rmini, (uint32_t)b->a[b->b[i-1-j]] - (k - 1));
-//						}
-//					} else {
-//						for (j = start; j < i; ++j) {
-//							kv_push(uint32_t, b->reg2rmini, (uint32_t)b->a[b->b[j]] - (k - 1));
-////						}
-//					}
-//				}
-//				for (j = start; j < i; ++j) { // compute ->len
-//					uint32_t q = ((uint32_t)b->mini.a[b->a[b->b[j]]>>32].y>>1) - (k - 1);
-//					uint32_t r = (uint32_t)b->a[b->b[j]];
-//					r = !rev? r - (k - 1) : (0x80000000U - r);
-//					if (r > er) lr += er - sr, sr = r, er = sr + k;
-//					else er = r + k;
-//					if (q > eq) lq += eq - sq, sq = q, eq = sq + k;
-//					else eq = q + k;
-//				}
-//				lr += er - sr, lq += eq - sq;
-//				r->len = lr < lq? lr : lq;
-//			}
-//			start = i;
-//                 } 
-//           }
-////>>>>>> OutputMinimizerPositions
 		}
 	}
 	*rep_len += rep_en - rep_st;
@@ -303,11 +234,6 @@ static mm128_t *collect_seed_hits(void *km, const mm_mapopt_t *opt, int max_occ,
 	radix_sort_128x(a, a + (*n_a));
 	return a;
 }
-//=======
-//	// generate hits, starting from the largest interval
-//	b->reg2mini.n = 0;
-//	for (i = b->intv.n - 1; i >= 0; --i) proc_intv(b, i, k, min_cnt, max_gap, flag);
-//>>>>>>> OutputMinimizerPositions
 
 static void chain_post(const mm_mapopt_t *opt, int max_chain_gap_ref, const mm_idx_t *mi, void *km, int qlen, int n_segs, const int *qlens, int *n_regs, mm_reg1_t *regs, mm128_t *a)
 {
@@ -447,28 +373,12 @@ void mm_map_frag(const mm_idx_t *mi, int n_segs, const int *qlens, const char **
 	if (n_segs == 1) { // uni-segment
 		regs0 = align_regs(opt, mi, b->km, qlens[0], seqs[0], &n_regs0, regs0, &n_a, a);
 		mm_set_mapq(b->km, n_regs0, regs0, opt->min_chain_score, opt->a, rep_len, is_sr);
-//fprintf(stderr, "qname=%s %d minimizers. regs0=%p n_regs0=%d cnt=%d n_a=%ld\n", qname, n_mini_pos, regs0, n_regs0, regs0->cnt, n_a);
-// TODO move to align skeletons 
-//		if ((opt->flag & MM_F_OUT_MINS)) {
-//			// record ref and query minimizer positions for later output
-//			mm_minipos_v *minipos = &(regs0->minipos);
-//			kv_resize(mm_minipos_t, 0, *minipos, n_mini_pos);
-//			int32_t pos;
-//			for(pos=0; pos < n_mini_pos; pos++) {
-//				//uint32_t qpos = (uint32_t)(a[pos].y&0xffffffff)>>1;
-//				mm_minipos_t tmp = { 0, (uint32_t)(mini_pos[pos]&0xffffffff) };
-//				kv_push(mm_minipos_t, 0, *minipos, tmp);
-//			}
-//fprintf(stderr, "generated them\n");
-//		}
-
 		n_regs[0] = n_regs0, regs[0] = regs0;
 	} else { // multi-segment
 		mm_seg_t *seg;
 		seg = mm_seg_gen(b->km, hash, n_segs, qlens, n_regs0, regs0, n_regs, regs, a); // split fragment chain to separate segment chains
 		free(regs0);
 		for (i = 0; i < n_segs; ++i) {
-//fprintf(stderr, "qname=%s %d minimizers. regi=%d regs0=%p n_regs0=%d cnt=%d n_a=%ld\n", qname, n_mini_pos, i, regs[i], n_regs[i], regs[i]->cnt, seg[i].n_a);
 			mm_set_parent(b->km, opt->mask_level, n_regs[i], regs[i], opt->a * 2 + opt->b); // update mm_reg1_t::parent
 			regs[i] = align_regs(opt, mi, b->km, qlens[i], seqs[i], &n_regs[i], regs[i], &seg[i].n_a, seg[i].a);
 			mm_set_mapq(b->km, n_regs[i], regs[i], opt->min_chain_score, opt->a, rep_len, is_sr);
@@ -520,8 +430,6 @@ typedef struct {
 	mm_bseq1_t *seq;
 	int *n_reg, *seg_off, *n_seg;
 	mm_reg1_t **reg;
-//	uint32_v *mini_rpos;
-//	uint32_v *mini_qpos;
 	mm_tbuf_t **buf;
 } step_t;
 
@@ -539,25 +447,6 @@ static void worker_for(void *_data, long i, int tid) // kt_for() callback
 			mm_revcomp_bseq(&s->seq[off + j]);
 		qlens[j] = s->seq[off + j].l_seq;
 		qseqs[j] = s->seq[off + j].seq;
-//=======
-//	step_t *step = (step_t*)_data;
-//	const mm_reg1_t *regs;
-//	int n_regs;
-//
-//	regs = mm_map(step->p->mi, step->seq[i].l_seq, step->seq[i].seq, &n_regs, step->buf[tid], step->p->opt, step->seq[i].name);
-//	step->n_reg[i] = n_regs;
-//	if (n_regs > 0) {
-//		step->reg[i] = (mm_reg1_t*)malloc(n_regs * sizeof(mm_reg1_t));
-//		memcpy(step->reg[i], regs, n_regs * sizeof(mm_reg1_t));
-//		if (step->p->opt->flag & MM_F_OUT_MINI) {
-//			// move the minimizer positions
-//			memcpy( &(step->mini_qpos[i]), &(step->buf[tid]->reg2qmini), sizeof(uint32_v));
-//			memcpy( &(step->mini_rpos[i]), &(step->buf[tid]->reg2rmini), sizeof(uint32_v));
-//			memset( &(step->buf[tid]->reg2qmini), 0, sizeof(uint32_v));
-//			memset( &(step->buf[tid]->reg2rmini), 0, sizeof(uint32_v));
-//		}
-//      }
-//>>>>>>> OutputMinimizerPositions
 	}
 	if (s->p->opt->flag & MM_F_INDEPEND_SEG) {
 		for (j = 0; j < s->n_seg[i]; ++j)
@@ -591,15 +480,6 @@ static void *worker_pipeline(void *shared, int step, void *in)
         s = (step_t*)calloc(1, sizeof(step_t));
 		if (p->n_fp > 1) s->seq = mm_bseq_read_frag2(p->n_fp, p->fp, p->mini_batch_size, with_qual, with_comment, &s->n_seq);
 		else s->seq = mm_bseq_read3(p->fp[0], p->mini_batch_size, with_qual, with_comment, frag_mode, &s->n_seq);
-//=======
-//	size_t m;
-//	pipeline_t *p = (pipeline_t*)shared;
-//	if (step == 0) { // step 0: read sequences
-//		step_t *s;
-//	        s = (step_t*)calloc(1, sizeof(step_t));
-//		s->seq = bseq_read(p->fp, p->batch_size, &s->n_seq);
-//		fprintf(stderr, "[M::%s] Read %ld sequences:\n", __func__, (long) s->n_seq);
-//>>>>>>> OutputMinimizerPositions
 		if (s->seq) {
 			s->p = p;
 			for (i = 0; i < s->n_seq; ++i)
@@ -660,57 +540,6 @@ static void *worker_pipeline(void *shared, int step, void *in)
 		km_destroy(km);
 		if (mm_verbose >= 3)
 			fprintf(stderr, "[M::%s::%.3f*%.2f] mapped %d sequences\n", __func__, realtime() - mm_realtime0, cputime() / (realtime() - mm_realtime0), s->n_seq);
-//=======
-//			s->mini_qpos = (uint32_v*)calloc(s->n_seq, sizeof(uint32_v));
-//			s->mini_rpos = (uint32_v*)calloc(s->n_seq, sizeof(uint32_v));
-//			return s;
-//		} else free(s);
-//	} else if (step == 1) { // step 1: map
-//		kt_for(p->n_threads, worker_for, in, ((step_t*)in)->n_seq);
-//		fprintf(stderr, "[M::%s] Processed %ld sequences\n", __func__, (long) ((step_t*)in)->n_seq);
-//		return in;
-//	} else if (step == 2) { // step 2: output
-//		step_t *s = (step_t*)in;
-//		const mm_idx_t *mi = p->mi;
-//		for (i = 0; i < p->n_threads; ++i) mm_tbuf_destroy(s->buf[i]);
-////		free(s->buf);
-//		kstring_t line;
-//		ks_init(&line);
-//		for (i = 0; i < s->n_seq; ++i) {
-//			m = 0;
-//			bseq1_t *t = &s->seq[i];
-//			for (j = 0; j < s->n_reg[i]; ++j) {
-//				ks_reset(&line);
-//				mm_reg1_t *r = &s->reg[i][j];
-//				if (r->len < p->opt->min_match) { m += r->cnt; continue; }
-//				ksprintf(&line, "%s\t%d\t%d\t%d\t%c\t", t->name, t->l_seq, r->qs, r->qe, "+-"[r->rev]);
-//				if (mi->name) kputs(mi->name[r->rid], &line);
-////				else ksprintf(&line, "%d", r->rid + 1);
-//				ksprintf(&line, "\t%d\t%d\t%d\t%d\t%d\t255\tcm:i:%d", mi->len[r->rid], r->rs, r->re, r->len,
-//						r->re - r->rs > r->qe - r->qs? r->re - r->rs : r->qe - r->qs, r->cnt);
-//				if (p->opt->flag&MM_F_OUT_MINI) {
-//					kputs("\tcq:B:", &line);
-//					for(k=0; k < r->cnt; k++) {
-//						ksprintf(&line, "%c%d", (k==0?'I':','), (int) s->mini_qpos[i].a[m+k]);
-//					}
-//					kputs("\tcr:B:", &line);
-//					for(k=0; k < r->cnt; k++) {
-//						ksprintf(&line, "%c%d", (k==0?'I':','), (int) s->mini_rpos[i].a[m+k]);
-//					}
-//					m += r->cnt;
-//				}
-//				kputc('\n', &line);
-//				printf(line.s);
-//			}
-//			free(s->reg[i]);
-//			free(s->seq[i].seq); free(s->seq[i].name);
-//			kv_destroy(s->mini_qpos[i]);
-//			kv_destroy(s->mini_rpos[i]);
-//		}
-//		ks_destroy(&line);
-//		free(s->reg); free(s->n_reg); free(s->seq);
-//		free(s->mini_rpos); free(s->mini_qpos);
-//>>>>>>> OutputMinimizerPositions
 		free(s);
 	}
 	return 0;

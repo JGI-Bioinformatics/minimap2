@@ -1,4 +1,4 @@
-CFLAGS=		-g -Wall -Og -Wc++-compat
+CFLAGS=		-g -Wall -O2 -Wc++-compat
 CPPFLAGS=	-DHAVE_KALLOC
 INCLUDES=
 OBJS=		kthread.o kalloc.o misc.o bseq.o sketch.o sdust.o options.o index.o chain.o align.o hit.o map.o format.o pe.o esterr.o ksw2_ll_sse.o
@@ -29,8 +29,7 @@ all:$(PROG)
 extra:all $(PROG_EXTRA)
 
 minimap2:main.o getopt.o libminimap2.a
-		#$(CC) $(CFLAGS) main.o getopt.o -o $@ -L. -lminimap2 $(LIBS)
-		$(CC) $(CFLAGS) main.o -o $@ -L. -lminimap2 $(LIBS)
+		$(CC) $(CFLAGS) main.o getopt.o -o $@ -L. -lminimap2 $(LIBS)
 
 minimap2-lite:example.o libminimap2.a
 		$(CC) $(CFLAGS) $< -o $@ -L. -lminimap2 $(LIBS)
