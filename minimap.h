@@ -31,7 +31,8 @@
 #define MM_F_ALL_CHAINS    0x800000
 #define MM_F_OUT_MD        0x1000000
 #define MM_F_COPY_COMMENT  0x2000000
-#define MM_F_OUT_MINS      0x4000000 // preserve and output minimizers as a tag
+#define MM_F_EQX           0x4000000 // use =/X instead of M
+#define MM_F_OUT_MINS      0x8000000 // preserve and output minimizers as a tag
 
 #define MM_I_HPC          0x1
 #define MM_I_NO_SEQ       0x2
@@ -124,6 +125,7 @@ typedef struct {
 	float min_join_flank_ratio;
 
 	int a, b, q, e, q2, e2; // matching score, mismatch, gap-open and gap-ext penalties
+	int sc_ambi; // score when one or both bases are "N"
 	int noncan;      // cost of non-canonical splicing sites
 	int zdrop, zdrop_inv;   // break alignment if alignment score drops too fast along the diagonal
 	int end_bonus;

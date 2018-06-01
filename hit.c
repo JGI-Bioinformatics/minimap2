@@ -144,7 +144,7 @@ void mm_set_parent(void *km, float mask_level, int n, mm_reg1_t *r, int sub_diff
 			if (ej <= si || sj >= ei) continue; // no overlap
 			min = ej - sj < ei - si? ej - sj : ei - si;
 			max = ej - sj > ei - si? ej - sj : ei - si;
-			ol = si < sj? (ei < sj? 0 : ei < ej? ei - sj : ej - sj) : (ej < si? 0 : ej < ei? ej - si : ei - si); // overlap length
+			ol = si < sj? (ei < sj? 0 : ei < ej? ei - sj : ej - sj) : (ej < si? 0 : ej < ei? ej - si : ei - si); // overlap length; TODO: this can be simplified
 			if ((float)ol / min - (float)uncov_len / max > mask_level) {
 				int cnt_sub = 0;
 				ri->parent = rp->parent;
