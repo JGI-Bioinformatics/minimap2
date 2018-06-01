@@ -52,7 +52,7 @@ static struct option long_options[] = {
 	{ "for-only",       no_argument,       0, 0 },   // 22
 	{ "rev-only",       no_argument,       0, 0 },   // 23
 	{ "heap-sort",      required_argument, 0, 0 },   // 24
-	{ "all-chain",      no_argument,       0, 'P' },
+	{ "all-chain",      no_argument,       0, 'P' }, // 25
 	{ "dual",           required_argument, 0, 0 },   // 26
 	{ "max-clip-ratio", required_argument, 0, 0 },   // 27
 	{ "min-occ-floor",  required_argument, 0, 0 },   // 28
@@ -200,6 +200,8 @@ int main(int argc, char *argv[])
 			yes_or_no(&opt, MM_F_SPLICE_FLANK, long_idx, optarg, 1);
 		} else if (c == 0 && long_idx == 24) { // --heap-sort
 			yes_or_no(&opt, MM_F_HEAP_SORT, long_idx, optarg, 1);
+		} else if (c == 0 && long_idx == 25) { // --all-chain
+			opt.flag |= MM_F_ALL_CHAINS;
 		} else if (c == 0 && long_idx == 26) { // --dual
 			yes_or_no(&opt, MM_F_NO_DUAL, long_idx, optarg, 0);
 		} else if (c == 'S') {
