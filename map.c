@@ -376,6 +376,7 @@ void mm_map_frag(const mm_idx_t *mi, int n_segs, const int *qlens, const char **
 	} else { // multi-segment
 		mm_seg_t *seg;
 		seg = mm_seg_gen(b->km, hash, n_segs, qlens, n_regs0, regs0, n_regs, regs, a); // split fragment chain to separate segment chains
+		kv_destroy(regs0->minipos);
 		free(regs0);
 		for (i = 0; i < n_segs; ++i) {
 			mm_set_parent(b->km, opt->mask_level, n_regs[i], regs[i], opt->a * 2 + opt->b); // update mm_reg1_t::parent
@@ -529,7 +530,10 @@ static void *worker_pipeline(void *shared, int step, void *in)
 				}
 			}
 			for (i = seg_st; i < seg_en; ++i) {
-				for (j = 0; j < s->n_reg[i]; ++j) { free(s->reg[i][j].p); kv_destroy(s->reg[i][j].minipos); }
+				for (j = 0; j < s->n_reg[i]; ++j) {
+					free(s->reg[i][j].p);
+					kv_destroy(s->reg[i][j].minipos);
+				}
 				free(s->reg[i]);
 				free(s->seq[i].seq); free(s->seq[i].name);
 				if (s->seq[i].qual) free(s->seq[i].qual);

@@ -4,6 +4,7 @@
 #include "mmpriv.h"
 #include "kalloc.h"
 #include "khash.h"
+#include "kvec.h"
 
 static inline void mm_cal_fuzzy_len(mm_reg1_t *r, const mm128_t *a)
 {
@@ -178,9 +179,12 @@ void mm_hit_sort_by_dp(void *km, int *n_regs, mm_reg1_t *r)
 			assert(r[i].p);
 			aux[n_aux].x = (uint64_t)r[i].p->dp_max << 32 | r[i].hash;
 			aux[n_aux++].y = i;
-		} else if (r[i].p) {
-			free(r[i].p);
-			r[i].p = 0;
+		} else {
+			if (r[i].p) {
+				free(r[i].p);
+				r[i].p = 0;
+			}
+			kv_destroy(r[i].minipos);
 		}
 	}
 	radix_sort_128x(aux, aux + n_aux);
