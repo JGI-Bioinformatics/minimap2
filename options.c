@@ -23,6 +23,7 @@ void mm_mapopt_init(mm_mapopt_t *opt)
 	opt->max_gap = 5000;
 	opt->max_gap_ref = -1;
 	opt->max_chain_skip = 25;
+	opt->max_chain_iter = 5000;
 
 	opt->mask_level = 0.5f;
 	opt->pri_ratio = 0.8f;
@@ -49,7 +50,7 @@ void mm_mapopt_init(mm_mapopt_t *opt)
 
 void mm_mapopt_update(mm_mapopt_t *opt, const mm_idx_t *mi)
 {
-	if ((opt->flag & MM_F_SPLICE_FOR) && (opt->flag & MM_F_SPLICE_REV))
+	if ((opt->flag & MM_F_SPLICE_FOR) || (opt->flag & MM_F_SPLICE_REV))
 		opt->flag |= MM_F_SPLICE;
 	if (opt->mid_occ <= 0)
 		opt->mid_occ = mm_idx_cal_max_occ(mi, opt->mid_occ_frac);
@@ -74,11 +75,11 @@ int mm_set_opt(const char *preset, mm_idxopt_t *io, mm_mapopt_t *mo)
 		io->flag = 0, io->k = 15, io->w = 5;
 		mo->flag |= MM_F_ALL_CHAINS | MM_F_NO_DIAG | MM_F_NO_DUAL | MM_F_NO_LJOIN;
 		mo->min_chain_score = 100, mo->pri_ratio = 0.0f, mo->max_gap = 10000, mo->max_chain_skip = 25;
+		mo->bw = 2000;
 	} else if (strcmp(preset, "ava-pb") == 0) {
 		io->flag |= MM_I_HPC, io->k = 19, io->w = 5;
 		mo->flag |= MM_F_ALL_CHAINS | MM_F_NO_DIAG | MM_F_NO_DUAL | MM_F_NO_LJOIN;
 		mo->min_chain_score = 100, mo->pri_ratio = 0.0f, mo->max_gap = 10000, mo->max_chain_skip = 25;
-		mo->bw = 2000;
 	} else if (strcmp(preset, "map10k") == 0 || strcmp(preset, "map-pb") == 0) {
 		io->flag |= MM_I_HPC, io->k = 19;
 	} else if (strcmp(preset, "map-ont") == 0) {
@@ -119,19 +120,32 @@ int mm_set_opt(const char *preset, mm_idxopt_t *io, mm_mapopt_t *mo)
 		mo->mid_occ = 1000;
 		mo->max_occ = 5000;
 		mo->mini_batch_size = 50000000;
-	} else if (strcmp(preset, "splice") == 0 || strcmp(preset, "cdna") == 0) {
+	} else if (strncmp(preset, "splice", 6) == 0 || strcmp(preset, "cdna") == 0) {
 		io->flag = 0, io->k = 15, io->w = 5;
 		mo->flag |= MM_F_SPLICE | MM_F_SPLICE_FOR | MM_F_SPLICE_REV | MM_F_SPLICE_FLANK;
 		mo->max_gap = 2000, mo->max_gap_ref = mo->bw = 200000;
 		mo->a = 1, mo->b = 2, mo->q = 2, mo->e = 1, mo->q2 = 32, mo->e2 = 0;
 		mo->noncan = 9;
+		mo->junc_bonus = 9;
 		mo->zdrop = 200, mo->zdrop_inv = 100; // because mo->a is halved
+		if (strcmp(preset, "splice:hq") == 0)
+			mo->junc_bonus = 5, mo->b = 4, mo->q = 6, mo->q2 = 24;
 	} else return -1;
 	return 0;
 }
 
 int mm_check_opt(const mm_idxopt_t *io, const mm_mapopt_t *mo)
 {
+	if (mo->split_prefix && (mo->flag & (MM_F_OUT_CS|MM_F_OUT_MD))) {
+		if (mm_verbose >= 1)
+			fprintf(stderr, "[ERROR]\033[1;31m --cs or --MD doesn't work with --split-prefix\033[0m\n");
+		return -6;
+	}
+	if (io->k <= 0 || io->w <= 0) {
+		if (mm_verbose >= 1)
+			fprintf(stderr, "[ERROR]\033[1;31m -k and -w must be positive\033[0m\n");
+		return -5;
+	}
 	if (mo->best_n < 0) {
 		if (mm_verbose >= 1)
 			fprintf(stderr, "[ERROR]\033[1;31m -N must be no less than 0\033[0m\n");
@@ -149,6 +163,11 @@ int mm_check_opt(const mm_idxopt_t *io, const mm_mapopt_t *mo)
 			fprintf(stderr, "[ERROR]\033[1;31m --for-only and --rev-only can't be applied at the same time\033[0m\n");
 		return -3;
 	}
+	if (mo->e <= 0 || mo->q <= 0) {
+		if (mm_verbose >= 1)
+			fprintf(stderr, "[ERROR]\033[1;31m -O and -E must be positive\033[0m\n");
+		return -1;
+	}
 	if ((mo->q != mo->q2 || mo->e != mo->e2) && !(mo->e > mo->e2 && mo->q + mo->e < mo->q2 + mo->e2)) {
 		if (mm_verbose >= 1)
 			fprintf(stderr, "[ERROR]\033[1;31m dual gap penalties violating E1>E2 and O1+E1<O2+E2\033[0m\n");
@@ -162,6 +181,11 @@ int mm_check_opt(const mm_idxopt_t *io, const mm_mapopt_t *mo)
 	if (mo->zdrop < mo->zdrop_inv) {
 		if (mm_verbose >= 1)
 			fprintf(stderr, "[ERROR]\033[1;31m Z-drop should not be less than inversion-Z-drop\033[0m\n");
+		return -5;
+	}
+	if ((mo->flag & MM_F_NO_PRINT_2ND) && (mo->flag & MM_F_ALL_CHAINS)) {
+		if (mm_verbose >= 1)
+			fprintf(stderr, "[ERROR]\033[1;31m -X/-P and --secondary=no can't be applied at the same time\033[0m\n");
 		return -5;
 	}
 	return 0;

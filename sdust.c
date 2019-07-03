@@ -70,10 +70,10 @@ void sdust_buf_destroy(sdust_buf_t *buf)
 static inline void shift_window(int t, kdq_t(int) *w, int T, int W, int *L, int *rw, int *rv, int *cw, int *cv)
 {
 	int s;
-	if (kdq_size(w) >= W - SD_WLEN + 1) { // TODO: is this right for SD_WLEN!=3?
+	if ((int)kdq_size(w) >= W - SD_WLEN + 1) { // TODO: is this right for SD_WLEN!=3?
 		s = *kdq_shift(int, w);
 		*rw -= --cw[s];
-		if (*L > kdq_size(w))
+		if (*L > (int)kdq_size(w))
 			--*L, *rv -= --cv[s];
 	}
 	kdq_push(int, w, t);
@@ -114,7 +114,7 @@ static void find_perfect(void *km, perf_intv_v *P, const kdq_t(int) *w, int T, i
 		r += c[t]++;
 		new_r = r, new_l = kdq_size(w) - i - 1;
 		if (new_r * 10 > T * new_l) {
-			for (j = 0; j < P->n && P->a[j].start >= i + start; ++j) { // find insertion position
+			for (j = 0; j < (int)P->n && P->a[j].start >= i + start; ++j) { // find insertion position
 				perf_intv_t *p = &P->a[j];
 				if (max_r == 0 || p->r * max_l > max_r * p->l)
 					max_r = p->r, max_l = p->l;
@@ -177,7 +177,7 @@ uint64_t *sdust(void *km, const uint8_t *seq, int l_seq, int T, int W, int *n)
 #ifdef _SDUST_MAIN
 #include <zlib.h>
 #include <stdio.h>
-#include "getopt.h"
+#include "ketopt.h"
 #include "kseq.h"
 KSEQ_INIT(gzFile, gzread)
 
@@ -186,16 +186,17 @@ int main(int argc, char *argv[])
 	gzFile fp;
 	kseq_t *ks;
 	int W = 64, T = 20, c;
+	ketopt_t o = KETOPT_INIT;
 
-	while ((c = getopt(argc, argv, "w:t:")) >= 0) {
-		if (c == 'w') W = atoi(optarg);
-		else if (c == 't') T = atoi(optarg);
+	while ((c = ketopt(&o, argc, argv, 1, "w:t:", 0)) >= 0) {
+		if (c == 'w') W = atoi(o.arg);
+		else if (c == 't') T = atoi(o.arg);
 	}
-	if (optind == argc) {
+	if (o.ind == argc) {
 		fprintf(stderr, "Usage: sdust [-w %d] [-t %d] <in.fa>\n", W, T);
 		return 1;
 	}
-	fp = strcmp(argv[optind], "-")? gzopen(argv[optind], "r") : gzdopen(fileno(stdin), "r");
+	fp = strcmp(argv[o.ind], "-")? gzopen(argv[o.ind], "r") : gzdopen(fileno(stdin), "r");
 	ks = kseq_init(fp);
 	while (kseq_read(ks) >= 0) {
 		uint64_t *r;

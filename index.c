@@ -31,6 +31,16 @@ typedef struct mm_idx_bucket_s {
 	void *h;     // hash table indexing _p_ and minimizers appearing once
 } mm_idx_bucket_t;
 
+typedef struct {
+	int32_t st, en, max; // max is not used for now
+	int32_t score:30, strand:2;
+} mm_idx_intv1_t;
+
+typedef struct mm_idx_intv_s {
+	int32_t n, m;
+	mm_idx_intv1_t *a;
+} mm_idx_intv_t;
+
 mm_idx_t *mm_idx_init(int w, int k, int b, int flag)
 {
 	mm_idx_t *mi;
@@ -45,13 +55,20 @@ mm_idx_t *mm_idx_init(int w, int k, int b, int flag)
 
 void mm_idx_destroy(mm_idx_t *mi)
 {
-	int i;
+	uint32_t i;
 	if (mi == 0) return;
 	if (mi->h) kh_destroy(str, (khash_t(str)*)mi->h);
-	for (i = 0; i < 1<<mi->b; ++i) {
-		free(mi->B[i].p);
-		free(mi->B[i].a.a);
-		kh_destroy(idx, (idxhash_t*)mi->B[i].h);
+	if (mi->B) {
+		for (i = 0; i < 1U<<mi->b; ++i) {
+			free(mi->B[i].p);
+			free(mi->B[i].a.a);
+			kh_destroy(idx, (idxhash_t*)mi->B[i].h);
+		}
+	}
+	if (mi->I) {
+		for (i = 0; i < mi->n_seq; ++i)
+			free(mi->I[i].a);
+		free(mi->I);
 	}
 	if (!mi->km) {
 		for (i = 0; i < mi->n_seq; ++i)
@@ -82,14 +99,15 @@ const uint64_t *mm_idx_get(const mm_idx_t *mi, uint64_t minier, int *n)
 
 void mm_idx_stat(const mm_idx_t *mi)
 {
-	int i, n = 0, n1 = 0;
+	int n = 0, n1 = 0;
+	uint32_t i;
 	uint64_t sum = 0, len = 0;
 	fprintf(stderr, "[M::%s] kmer size: %d; skip: %d; is_hpc: %d; #seq: %d\n", __func__, mi->k, mi->w, mi->flag&MM_I_HPC, mi->n_seq);
 	for (i = 0; i < mi->n_seq; ++i)
 		len += mi->seq[i].len;
-	for (i = 0; i < 1<<mi->b; ++i)
+	for (i = 0; i < 1U<<mi->b; ++i)
 		if (mi->B[i].h) n += kh_size((idxhash_t*)mi->B[i].h);
-	for (i = 0; i < 1<<mi->b; ++i) {
+	for (i = 0; i < 1U<<mi->b; ++i) {
 		idxhash_t *h = (idxhash_t*)mi->B[i].h;
 		khint_t k;
 		if (h == 0) continue;
@@ -172,7 +190,8 @@ int32_t mm_idx_cal_max_occ(const mm_idx_t *mi, float f)
 
 static void worker_post(void *g, long i, int tid)
 {
-	int j, start_a, start_p, n, n_keys;
+	int n, n_keys;
+	size_t j, start_a, start_p;
 	idxhash_t *h;
 	mm_idx_t *mi = (mm_idx_t*)g;
 	mm_idx_bucket_t *b = &mi->B[i];
@@ -200,7 +219,7 @@ static void worker_post(void *g, long i, int tid)
 			int absent;
 			mm128_t *p = &b->a.a[j-1];
 			itr = kh_put(idx, h, p->x>>8>>mi->b<<1, &absent);
-			assert(absent && j - start_a == n);
+			assert(absent && j == start_a + n);
 			if (n == 1) {
 				kh_key(h, itr) |= 1;
 				kh_val(h, itr) = p->y;
@@ -216,7 +235,7 @@ static void worker_post(void *g, long i, int tid)
 		} else ++n;
 	}
 	b->h = h;
-	assert(b->n == start_p);
+	assert(b->n == (int32_t)start_p);
 
 	// deallocate and clear b->a
 	kfree(0, b->a.a);
@@ -336,7 +355,7 @@ mm_idx_t *mm_idx_gen(mm_bseq_file_t *fp, int w, int k, int b, int flag, int mini
 	pipeline_t pl;
 	if (fp == 0 || mm_bseq_eof(fp)) return 0;
 	memset(&pl, 0, sizeof(pipeline_t));
-	pl.mini_batch_size = mini_batch_size < batch_size? mini_batch_size : batch_size;
+	pl.mini_batch_size = (uint64_t)mini_batch_size < batch_size? mini_batch_size : batch_size;
 	pl.batch_size = batch_size;
 	pl.fp = fp;
 	pl.mi = mm_idx_init(w, k, b, flag);
@@ -368,7 +387,9 @@ mm_idx_t *mm_idx_str(int w, int k, int is_hpc, int bucket_bits, int n, const cha
 	uint64_t sum_len = 0;
 	mm128_v a = {0,0,0};
 	mm_idx_t *mi;
+	khash_t(str) *h;
 	int i, flag = 0;
+
 	if (n <= 0) return 0;
 	for (i = 0; i < n; ++i) // get the total length
 		sum_len += strlen(seq[i]);
@@ -379,13 +400,17 @@ mm_idx_t *mm_idx_str(int w, int k, int is_hpc, int bucket_bits, int n, const cha
 	mi->n_seq = n;
 	mi->seq = (mm_idx_seq_t*)kcalloc(mi->km, n, sizeof(mm_idx_seq_t)); // ->seq is allocated from km
 	mi->S = (uint32_t*)calloc((sum_len + 7) / 8, 4);
+	mi->h = h = kh_init(str);
 	for (i = 0, sum_len = 0; i < n; ++i) {
 		const char *s = seq[i];
 		mm_idx_seq_t *p = &mi->seq[i];
 		uint32_t j;
 		if (name && name[i]) {
+			int absent;
 			p->name = (char*)kmalloc(mi->km, strlen(name[i]) + 1);
 			strcpy(p->name, name[i]);
+			kh_put(str, h, p->name, &absent);
+			assert(absent);
 		}
 		p->offset = sum_len;
 		p->len = strlen(s);
@@ -413,17 +438,20 @@ mm_idx_t *mm_idx_str(int w, int k, int is_hpc, int bucket_bits, int n, const cha
 void mm_idx_dump(FILE *fp, const mm_idx_t *mi)
 {
 	uint64_t sum_len = 0;
-	uint32_t x[5];
-	int i;
+	uint32_t x[5], i;
 
 	x[0] = mi->w, x[1] = mi->k, x[2] = mi->b, x[3] = mi->n_seq, x[4] = mi->flag;
 	fwrite(MM_IDX_MAGIC, 1, 4, fp);
 	fwrite(x, 4, 5, fp);
 	for (i = 0; i < mi->n_seq; ++i) {
-		uint8_t l;
-		l = strlen(mi->seq[i].name);
-		fwrite(&l, 1, 1, fp);
-		fwrite(mi->seq[i].name, 1, l, fp);
+		if (mi->seq[i].name) {
+			uint8_t l = strlen(mi->seq[i].name);
+			fwrite(&l, 1, 1, fp);
+			fwrite(mi->seq[i].name, 1, l, fp);
+		} else {
+			uint8_t l = 0;
+			fwrite(&l, 1, 1, fp);
+		}
 		fwrite(&mi->seq[i].len, 4, 1, fp);
 		sum_len += mi->seq[i].len;
 	}
@@ -450,9 +478,8 @@ void mm_idx_dump(FILE *fp, const mm_idx_t *mi)
 
 mm_idx_t *mm_idx_load(FILE *fp)
 {
-	int i;
 	char magic[4];
-	uint32_t x[5];
+	uint32_t x[5], i;
 	uint64_t sum_len = 0;
 	mm_idx_t *mi;
 
@@ -466,9 +493,11 @@ mm_idx_t *mm_idx_load(FILE *fp)
 		uint8_t l;
 		mm_idx_seq_t *s = &mi->seq[i];
 		fread(&l, 1, 1, fp);
-		s->name = (char*)kmalloc(mi->km, l + 1);
-		fread(s->name, 1, l, fp);
-		s->name[l] = 0;
+		if (l) {
+			s->name = (char*)kmalloc(mi->km, l + 1);
+			fread(s->name, 1, l, fp);
+			s->name[l] = 0;
+		}
 		fread(&s->len, 4, 1, fp);
 		s->offset = sum_len;
 		sum_len += s->len;
@@ -504,14 +533,19 @@ mm_idx_t *mm_idx_load(FILE *fp)
 int64_t mm_idx_is_idx(const char *fn)
 {
 	int fd, is_idx = 0;
-	off_t ret, off_end;
+	int64_t ret, off_end;
 	char magic[4];
 
 	if (strcmp(fn, "-") == 0) return 0; // read from pipe; not an index
 	fd = open(fn, O_RDONLY);
 	if (fd < 0) return -1; // error
+#ifdef WIN32
+	if ((off_end = _lseeki64(fd, 0, SEEK_END)) >= 4) {
+		_lseeki64(fd, 0, SEEK_SET);
+#else
 	if ((off_end = lseek(fd, 0, SEEK_END)) >= 4) {
 		lseek(fd, 0, SEEK_SET);
+#endif // WIN32
 		ret = read(fd, magic, 4);
 		if (ret == 4 && strncmp(magic, MM_IDX_MAGIC, 4) == 0)
 			is_idx = 1;
@@ -557,7 +591,7 @@ mm_idx_t *mm_idx_reader_read(mm_idx_reader_t *r, int n_threads)
 		mi = mm_idx_gen(r->fp.seq, r->opt.w, r->opt.k, r->opt.bucket_bits, r->opt.flag, r->opt.mini_batch_size, n_threads, r->opt.batch_size);
 	if (mi) {
 		if (r->fp_out) mm_idx_dump(r->fp_out, mi);
-		++r->n_parts;
+		mi->index = r->n_parts++;
 	}
 	return mi;
 }
@@ -565,4 +599,128 @@ mm_idx_t *mm_idx_reader_read(mm_idx_reader_t *r, int n_threads)
 int mm_idx_reader_eof(const mm_idx_reader_t *r) // TODO: in extremely rare cases, mm_bseq_eof() might not work
 {
 	return r->is_idx? (feof(r->fp.idx) || ftell(r->fp.idx) == r->idx_size) : mm_bseq_eof(r->fp.seq);
+}
+
+#include <ctype.h>
+#include <zlib.h>
+#include "ksort.h"
+#include "kseq.h"
+KSTREAM_DECLARE(gzFile, gzread)
+
+#define sort_key_bed(a) ((a).st)
+KRADIX_SORT_INIT(bed, mm_idx_intv1_t, sort_key_bed, 4)
+
+mm_idx_intv_t *mm_idx_read_bed(const mm_idx_t *mi, const char *fn, int read_junc)
+{
+	gzFile fp;
+	kstream_t *ks;
+	kstring_t str = {0,0,0};
+	mm_idx_intv_t *I;
+
+	fp = fn && strcmp(fn, "-")? gzopen(fn, "r") : gzdopen(fileno(stdin), "r");
+	if (fp == 0) return 0;
+	I = (mm_idx_intv_t*)calloc(mi->n_seq, sizeof(*I));
+	ks = ks_init(fp);
+	while (ks_getuntil(ks, KS_SEP_LINE, &str, 0) >= 0) {
+		mm_idx_intv_t *r;
+		mm_idx_intv1_t t = {-1,-1,-1,-1,0};
+		char *p, *q, *bl, *bs;
+		int32_t i, id = -1, n_blk = 0;
+		for (p = q = str.s, i = 0;; ++p) {
+			if (*p == 0 || isspace(*p)) {
+				int32_t c = *p;
+				*p = 0;
+				if (i == 0) { // chr
+					id = mm_idx_name2id(mi, q);
+					if (id < 0) break; // unknown name; TODO: throw a warning
+				} else if (i == 1) { // start
+					t.st = atol(q); // TODO: watch out integer overflow!
+					if (t.st < 0) break;
+				} else if (i == 2) { // end
+					t.en = atol(q);
+					if (t.en < 0) break;
+				} else if (i == 4) { // BED score
+					t.score = atol(q);
+				} else if (i == 5) { // strand
+					t.strand = *q == '+'? 1 : *q == '-'? -1 : 0;
+				} else if (i == 9) {
+					if (!isdigit(*q)) break;
+					n_blk = atol(q);
+				} else if (i == 10) {
+					bl = q;
+				} else if (i == 11) {
+					bs = q;
+					break;
+				}
+				if (c == 0) break;
+				++i, q = p + 1;
+			}
+		}
+		if (id < 0 || t.st < 0 || t.st >= t.en) continue;
+		r = &I[id];
+		if (i >= 11 && read_junc) { // BED12
+			int32_t st, sz, en;
+			st = strtol(bs, &bs, 10); ++bs;
+			sz = strtol(bl, &bl, 10); ++bl;
+			en = t.st + st + sz;
+			for (i = 1; i < n_blk; ++i) {
+				mm_idx_intv1_t s = t;
+				if (r->n == r->m) {
+					r->m = r->m? r->m + (r->m>>1) : 16;
+					r->a = (mm_idx_intv1_t*)realloc(r->a, sizeof(*r->a) * r->m);
+				}
+				st = strtol(bs, &bs, 10); ++bs;
+				sz = strtol(bl, &bl, 10); ++bl;
+				s.st = en, s.en = t.st + st;
+				en = t.st + st + sz;
+				if (s.en > s.st) r->a[r->n++] = s;
+			}
+		} else {
+			if (r->n == r->m) {
+				r->m = r->m? r->m + (r->m>>1) : 16;
+				r->a = (mm_idx_intv1_t*)realloc(r->a, sizeof(*r->a) * r->m);
+			}
+			r->a[r->n++] = t;
+		}
+	}
+	free(str.s);
+	ks_destroy(ks);
+	gzclose(fp);
+	return I;
+}
+
+int mm_idx_bed_read(mm_idx_t *mi, const char *fn, int read_junc)
+{
+	int32_t i;
+	if (mi->h == 0) mm_idx_index_name(mi);
+	mi->I = mm_idx_read_bed(mi, fn, read_junc);
+	if (mi->I == 0) return -1;
+	for (i = 0; i < mi->n_seq; ++i) // TODO: eliminate redundant intervals
+		radix_sort_bed(mi->I[i].a, mi->I[i].a + mi->I[i].n);
+	return 0;
+}
+
+int mm_idx_bed_junc(const mm_idx_t *mi, int32_t ctg, int32_t st, int32_t en, uint8_t *s)
+{
+	int32_t i, left, right;
+	mm_idx_intv_t *r;
+	memset(s, 0, en - st);
+	if (mi->I == 0 || ctg < 0 || ctg >= mi->n_seq) return -1;
+	r = &mi->I[ctg];
+	left = 0, right = r->n;
+	while (right > left) {
+		int32_t mid = left + ((right - left) >> 1);
+		if (r->a[mid].st >= st) right = mid;
+		else left = mid + 1;
+	}
+	for (i = left; i < r->n; ++i) {
+		if (st <= r->a[i].st && en >= r->a[i].en && r->a[i].strand != 0) {
+			if (r->a[i].strand > 0) {
+				s[r->a[i].st - st] |= 1, s[r->a[i].en - 1 - st] |= 2;
+			} else {
+				s[r->a[i].st - st] |= 8, s[r->a[i].en - 1 - st] |= 4;
+			}
+		}
+	}
+	return left;
 }

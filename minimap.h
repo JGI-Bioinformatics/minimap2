@@ -32,7 +32,11 @@
 #define MM_F_OUT_MD        0x1000000
 #define MM_F_COPY_COMMENT  0x2000000
 #define MM_F_EQX           0x4000000 // use =/X instead of M
-#define MM_F_OUT_MINS      0x8000000 // preserve and output minimizers as a tag
+#define MM_F_PAF_NO_HIT    0x8000000 // output unmapped reads to PAF
+#define MM_F_NO_END_FLT    0x10000000
+#define MM_F_HARD_MLEVEL   0x20000000
+#define MM_F_SAM_HIT_ONLY  0x40000000
+#define MM_F_OUT_MINS      0x80000000 // preserve and output minimizers as a tag
 
 #define MM_I_HPC          0x1
 #define MM_I_NO_SEQ       0x2
@@ -64,9 +68,11 @@ typedef struct {
 typedef struct {
 	int32_t b, w, k, flag;
 	uint32_t n_seq;            // number of reference sequences
+	int32_t index;
 	mm_idx_seq_t *seq;         // sequence name, length and offset
 	uint32_t *S;               // 4-bit packed sequence
 	struct mm_idx_bucket_s *B; // index (hidden)
+	struct mm_idx_intv_s *I;   // intervals (hidden)
 	void *km, *h;
 } mm_idx_t;
 
@@ -105,14 +111,16 @@ typedef struct {
 } mm_idxopt_t;
 
 typedef struct {
+	int64_t flag;    // see MM_F_* macros
 	int seed;
 	int sdust_thres; // score threshold for SDUST; 0 to disable
-	int flag;        // see MM_F_* macros
+
+	int max_qlen;    // max query length
 
 	int bw;          // bandwidth
 	int max_gap, max_gap_ref; // break a chain if there are no minimizers in a max_gap window
 	int max_frag_len;
-	int max_chain_skip;
+	int max_chain_skip, max_chain_iter;
 	int min_cnt;         // min number of minimizers on each chain
 	int min_chain_score; // min chaining score
 
@@ -127,6 +135,7 @@ typedef struct {
 	int a, b, q, e, q2, e2; // matching score, mismatch, gap-open and gap-ext penalties
 	int sc_ambi; // score when one or both bases are "N"
 	int noncan;      // cost of non-canonical splicing sites
+	int junc_bonus;
 	int zdrop, zdrop_inv;   // break alignment if alignment score drops too fast along the diagonal
 	int end_bonus;
 	int min_dp_max;  // drop an alignment if the score of the max scoring segment is below this threshold
@@ -141,6 +150,9 @@ typedef struct {
 	int32_t mid_occ;     // ignore seeds with occurrences above this threshold
 	int32_t max_occ;
 	int mini_batch_size; // size of a batch of query bases to process in parallel
+	int64_t max_sw_mat;
+
+	const char *split_prefix;
 } mm_mapopt_t;
 
 // index reader
@@ -226,6 +238,36 @@ void mm_idx_reader_close(mm_idx_reader_t *r);
 int mm_idx_reader_eof(const mm_idx_reader_t *r);
 
 /**
+ * Check whether the file contains a minimap2 index
+ *
+ * @param fn         file name
+ *
+ * @return the file size if fn is an index file; 0 if fn is not.
+ */
+int64_t mm_idx_is_idx(const char *fn);
+
+/**
+ * Load a part of an index
+ *
+ * Given a uni-part index, this function loads the entire index into memory.
+ * Given a multi-part index, it loads one part only and places the file pointer
+ * at the end of that part.
+ *
+ * @param fp         pointer to FILE object
+ *
+ * @return minimap2 index read from fp
+ */
+mm_idx_t *mm_idx_load(FILE *fp);
+
+/**
+ * Append an index (or one part of a full index) to file
+ *
+ * @param fp         pointer to FILE object
+ * @param mi         minimap2 index
+ */
+void mm_idx_dump(FILE *fp, const mm_idx_t *mi);
+
+/**
  * Create an index from strings in memory
  *
  * @param w            minimizer window size
@@ -273,6 +315,8 @@ mm_tbuf_t *mm_tbuf_init(void);
  */
 void mm_tbuf_destroy(mm_tbuf_t *b);
 
+void *mm_tbuf_get_km(mm_tbuf_t *b);
+
 /**
  * Align a query sequence against an index
  *
@@ -309,10 +353,29 @@ int mm_map_file(const mm_idx_t *idx, const char *fn, const mm_mapopt_t *opt, int
 
 int mm_map_file_frag(const mm_idx_t *idx, int n_segs, const char **fn, const mm_mapopt_t *opt, int n_threads);
 
+/**
+ * Generate the cs tag (new in 2.12)
+ *
+ * @param km         memory blocks; set to NULL if unsure
+ * @param buf        buffer to write the cs/MD tag; typicall NULL on the first call
+ * @param max_len    max length of the buffer; typically set to 0 on the first call
+ * @param mi         index
+ * @param r          alignment
+ * @param seq        query sequence
+ * @param no_iden    true to use : instead of =
+ *
+ * @return the length of cs
+ */
+int mm_gen_cs(void *km, char **buf, int *max_len, const mm_idx_t *mi, const mm_reg1_t *r, const char *seq, int no_iden);
+int mm_gen_MD(void *km, char **buf, int *max_len, const mm_idx_t *mi, const mm_reg1_t *r, const char *seq);
+
 // query sequence name and sequence in the minimap2 index
 int mm_idx_index_name(mm_idx_t *mi);
 int mm_idx_name2id(const mm_idx_t *mi, const char *name);
 int mm_idx_getseq(const mm_idx_t *mi, uint32_t rid, uint32_t st, uint32_t en, uint8_t *seq);
+
+int mm_idx_bed_read(mm_idx_t *mi, const char *fn, int read_junc);
+int mm_idx_bed_junc(const mm_idx_t *mi, int32_t ctg, int32_t st, int32_t en, uint8_t *s);
 
 // deprecated APIs for backward compatibility
 void mm_mapopt_init(mm_mapopt_t *opt);

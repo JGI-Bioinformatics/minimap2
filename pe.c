@@ -54,7 +54,7 @@ void mm_set_pe_thru(const int *qlens, int *n_regs, mm_reg1_t **regs)
 	if (n_pri[0] == 1 && n_pri[1] == 1) {
 		mm_reg1_t *p = &regs[0][pri[0]];
 		mm_reg1_t *q = &regs[1][pri[1]];
-		if (p->rid == q->rid && p->rev == q->rev && abs(p->rs - q->rs) < 3 && abs(p->re - p->re) < 3
+		if (p->rid == q->rid && p->rev == q->rev && abs(p->rs - q->rs) < 3 && abs(p->re - q->re) < 3
 			&& ((p->qs == 0 && qlens[1] - q->qe == 0) || (q->qs == 0 && qlens[0] - p->qe == 0)))
 		{
 			p->pe_thru = q->pe_thru = 1;
@@ -105,7 +105,7 @@ void mm_pair(void *km, int max_gap_ref, int pe_bonus, int sub_diff, int match_sc
 	max = -1;
 	max_idx[0] = max_idx[1] = -1;
 	last[0] = last[1] = -1;
-	kv_resize(uint64_t, km, sc, n);
+	kv_resize(uint64_t, km, sc, (size_t)n);
 	for (i = 0; i < n; ++i) {
 		if (a[i].key & 1) { // reverse first read or forward second read
 			mm_reg1_t *q, *r;
@@ -151,8 +151,8 @@ void mm_pair(void *km, int max_gap_ref, int pe_bonus, int sub_diff, int match_sc
 			}
 		}
 		mapq_pe = r[0]->mapq > r[1]->mapq? r[0]->mapq : r[1]->mapq;
-		for (i = 0; i < sc.n; ++i)
-			if ((sc.a[i]>>32) + sub_diff >= max>>32)
+		for (i = 0; i < (int)sc.n; ++i)
+			if ((sc.a[i]>>32) + sub_diff >= (uint64_t)max>>32)
 				++n_sub;
 		if (sc.n > 1) {
 			int mapq_pe_alt;
@@ -164,7 +164,7 @@ void mm_pair(void *km, int max_gap_ref, int pe_bonus, int sub_diff, int match_sc
 		if (sc.n == 1) {
 			if (r[0]->mapq < 2) r[0]->mapq = 2;
 			if (r[1]->mapq < 2) r[1]->mapq = 2;
-		} else if (max>>32 > sc.a[sc.n - 2]>>32) {
+		} else if ((uint64_t)max>>32 > sc.a[sc.n - 2]>>32) {
 			if (r[0]->mapq < 1) r[0]->mapq = 1;
 			if (r[1]->mapq < 1) r[1]->mapq = 1;
 		}
